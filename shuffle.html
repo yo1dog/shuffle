@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo</title>
+  <style>
+    body {
+      line-height: 175%;
+    }
+    input:invalid {
+      background-color: #FCC;
+    }
+    input {
+      width: 40pt;
+    }
+    .term {
+      font-family: monospace;
+      background-color: #EEE;
+      padding: 8pt;
+      border: 2pt solid black;
+      white-space: pre;
+      line-height: 125%;
+    }
+    .container {
+      position: relative;
+      height: 30pt;
+    }
+    .item {
+      position: absolute;
+      height: 100%;
+      transition: ease;
+      transition-property: width, left;
+      padding: 0pt 2.5pt;
+      box-sizing: border-box;
+    }
+    .item > div {
+      width: 100%;
+      height: 100%;
+    }
+    .randMarker {
+      position: absolute;
+      top: -10pt;
+      height: 50pt;
+      box-sizing: border-box;
+      border-right: solid black 5pt;
+      z-index: 100;
+      transition: ease;
+      transition-property: width, left, opacity, background-color;
+    }
+    /*
+    .randMarkerText {
+      position: absolute;
+      display: block;
+      transition: ease;
+      transition-property: left, opacity;
+      z-index: 100;
+      top: 45pt;
+      font-size: 12pt;
+    }
+    */
+    .listContainer {
+      height: 40pt;
+      padding-bottom: 20pt;
+      display: flex;
+    }
+    .listContainer div {
+      opacity: 0;
+      width: 0pt;
+      height: 20pt;
+      display: inline-block;
+      align-self: flex-end;
+      transition-property: width, opacity, background-color, margin;
+      animation-timing-function: ease;
+    }
+  </style>
+</head>
+<body>
+
+<label>Items:</label> <input class="numItems" type="number" min="1" max="20" step="1" value="5" autocomplete="off"/><br />
+<label>Speed:</label> <input class="speed" type="number" min="1" max="6" step="1" value="3" autocomplete="off" /><br />
+
+<script>
+
+let targetNumItems = 5;
+document.querySelector('.numItems').addEventListener('change', event => {
+  if (!event.target.validity.valid) return;
+  targetNumItems = event.target.valueAsNumber;
+});
+
+const speeds = [6000,3000,1000,500,200,50].map(x => x /2);
+let currentDelayMS = speeds[2];
+
+function setAnimationDuration() {
+  let animationDelayMS = Math.floor(Math.min(currentDelayMS, 1000));
+  if (animationDelayMS >= 250) animationDelayMS *= 0.75;
+  if (animationDelayMS <= 50) animationDelayMS = 0;
+  animationSpeedStyleElem.textContent = `
+    .animated{transition-duration: ${animationDelayMS}ms}
+    .animatedExact{transition-duration: ${currentDelayMS*2}ms}
+  `;
+}
+const animationSpeedStyleElem = document.createElement('style');
+animationSpeedStyleElem.type = 'text/css';
+setAnimationDuration();
+document.head.appendChild(animationSpeedStyleElem);
+
+document.querySelector('.speed').addEventListener('change', event => {
+  if (!event.target.validity.valid) return;
+  const newDelayMS = speeds[event.target.valueAsNumber - 1];
+  if (!newDelayMS) return;
+  
+  currentDelayMS = newDelayMS;
+  setAnimationDuration();
+});
+
+async function wait() {
+  await new Promise(r => setTimeout(r, currentDelayMS));
+}
+
+const colors = [
+  '#e6194b','#3cb44b','#4363d8','#f58231','#911eb4','#46f0f0','#f032e6','#bcf60c','#fabebe','#008080',
+  '#e6beff','#9a6324','#800000','#aaffc3','#808000','#ffd8b1','#000075','#808080','#000000','#ffe119'
+];
+/** @param {HTMLElement} containerElem */
+function makeItem(id, containerElem) {
+  const color = colors[id % colors.length];
+  const itemElem = document.createElement('div');
+  itemElem.classList.add('item', 'animated');
+  const innerElem = document.createElement('div');
+  innerElem.style.backgroundColor = color;
+  itemElem.appendChild(innerElem);
+  containerElem.appendChild(itemElem);
+  
+  return {
+    id,
+    color,
+    elem: itemElem
+  };
+}
+
+/** @param {HTMLElement} parentElem */
+function createPattern(parentElem, cb) {
+  const listContainer = document.createElement('div');
+  listContainer.className = 'listContainer';
+  parentElem.insertAdjacentElement('beforebegin', listContainer);
+  
+  /** @type {HTMLElement[]} */
+  const listElems = [];
+  for (let i = 0; i < 50; ++i) {
+    const listElem = document.createElement('div');
+    listElem.className = 'animated';
+    listElems.push(listElem);
+    listContainer.appendChild(listElem);
+  }
+  let listElmIndex = 0;
+  
+  const containerElem = document.createElement('div');
+  containerElem.className = 'container';
+  parentElem.appendChild(containerElem);
+  
+  const randMarkerElem = document.createElement('div');
+  randMarkerElem.classList.add('randMarker', 'animated');
+  containerElem.appendChild(randMarkerElem);
+  //const randMarkerTextElem = document.createElement('span');
+  //randMarkerTextElem.classList.add('randMarkerText', 'animated');
+  //containerElem.appendChild(randMarkerTextElem);
+  
+  const items = [];
+  const step = cb(items);
+  
+  let curResult;
+  procs.push({
+    first(random) {
+      let itemsWereAdded = false;
+      let itemsWereRemoved = false;
+      if (items.length !== targetNumItems) {
+        if (items.length > targetNumItems) {
+          for (let i = items.length - 1; i >= 0 && items.length > targetNumItems; --i) {
+            if (items[i].id >= targetNumItems) {
+              containerElem.removeChild(items[i].elem);
+              items.splice(i, 1);
+            }
+          }
+          itemsWereRemoved = true;
+        }
+        else {
+          while (items.length < targetNumItems) {
+            items.push(makeItem(items.length, containerElem));
+          }
+          itemsWereAdded = true;
+        }
+      }
+      
+      const result = step(random, {
+        itemsWereAdded,
+        itemsWereRemoved,
+      });
+      const {rand} = result;
+      
+      const randCssPos = (rand * 100) + '%';
+      randMarkerElem.style.width = randCssPos;
+      randMarkerElem.style.opacity = 1;
+      //randMarkerTextElem.innerText = rand.toFixed(2);
+      //randMarkerTextElem.style.left = randCssPos;
+      curResult = result;
+    },
+    second() {
+      if (!curResult) return;
+      const {chosenItem, randItemRelPos} = curResult;
+      
+      for (let i = 0; i < items.length; ++i) {
+        const item = items[i];
+        if (item.__i !== i) {
+          item.elem.style.zIndex = (item.__i = i) + 1;
+        }
+        if (item.__pos !== item.pos) {
+          item.elem.style.left = ((item.__pos = item.pos) * 100) + '%';
+        }
+        if (item.__weight !== item.weight) {
+          item.elem.style.width = ((item.__weight = item.weight) * 100) + '%';
+        }
+      }
+      
+      listElems[listElmIndex === 0? listElems.length - 1 : listElmIndex - 1].style.margin= '0pt';
+      
+      listElems[listElmIndex].style.backgroundColor = chosenItem.color;
+      listElems[listElmIndex].style.opacity = 1;
+      listElems[listElmIndex].style.width = '20pt';
+      listElems[listElmIndex].style.margin= '4pt';
+      
+      listContainer.insertAdjacentElement('beforeend', listElems[(listElmIndex + 1) % listElems.length]);
+      listElems[(listElmIndex + 1) % listElems.length].style.opacity = 0;
+      listElems[(listElmIndex + 1) % listElems.length].style.backgroundColor = 'none';
+      
+      listElems[(listElmIndex + 2) % listElems.length].style.width = '0pt';
+      
+      listElmIndex = (listElmIndex + 1) % listElems.length;
+      
+      if (currentDelayMS > 100) {
+        const randCssPos = ((chosenItem.pos + (chosenItem.weight * randItemRelPos)) * 100) + '%';
+        randMarkerElem.style.width = randCssPos;
+        randMarkerElem.style.opacity = 0.25;
+        //randMarkerTextElem.style.left = randCssPos;
+      }
+      
+      // if (updateGridColWeights) {
+      //   let gridTemplateColumns = '';
+      //   for (let i = 0; i < items.length; ++i) {
+      //     if (i > 0) gridTemplateColumns += ' ';
+      //     gridTemplateColumns += ((items[i].weight || 0) * 100) + 'fr';
+      //   }
+      //   containerElem.style.gridTemplateColumns = gridTemplateColumns;
+      // }
+    }
+  });
+}
+
+const procs = [];
+async function syncLoop() {
+  while (true) {
+    //const random = Math.random;
+    const random = (() => {const rand = Math.random(); return () => rand;})();
+    for (const proc of procs) proc.first(random);
+    if (currentDelayMS > 50) await wait();
+    for (const proc of procs) proc.second();
+    await wait();
+  }
+}
+
+</script>
+
+
+  <div class="logAlgo">
+    <h2>Rotating Log Distribution</h2>
+    <div class="term"></div>
+    <label>Slope:</label> <input class="slope" type="number" min="0.0" max="10" step="0.25" value="1.25" autocomplete="off"/><br />
+  </div>
+<script>(async() => {
+
+// Page setup.
+const rootElem = document.querySelector('.logAlgo');
+const termElem = rootElem.querySelector('.term');
+const slopeElem = rootElem.querySelector('.slope');
+
+createPattern(termElem, items => {
+  let slopeFactor = 1.25;
+  slopeElem.addEventListener('change', event => {
+    if (!event.target.validity.valid) return;
+    slopeFactor = event.target.valueAsNumber || 0.01;
+    distributions = calcDistributions(items.length);
+  });
+  
+  // ===============================================================
+  // Rotating Log Distribution Algo
+  // ===============================================================
+
+  // -s*ln(1 - x*(1 - e^(-n/s)))
+  // -((e^(-x/s)) * (e^(x/s) - 1))/(e^(-n/s) - 1)
+  // 
+  // https://www.desmos.com/calculator/lqo7wurgry
+  // \operatorname{floor}\left(-s*\ln(1-x(1-e^{-n/s}))\right)
+  // -\frac{e^{-\frac{x}{s}}\left(-1+e^{\frac{x}{s}}\right)}{-1+e^{-\frac{n}{s}}}
+  
+  // Pre-calculate distributions.
+  function calcDistributions(numElems) {
+    const n = numElems;
+    const s = slopeFactor;
+    
+    const distributions = [];
+    for (let x = 1; x < n; ++x) {
+      distributions.push(
+        -(Math.exp(-x/s) * (Math.exp(x/s) - 1))/(Math.exp(-n/s) - 1)
+      );
+    }
+    return distributions;
+  }
+  
+  let distributions = calcDistributions(items.length);
+  
+  return function step(random, {itemsWereAdded, itemsWereRemoved}) {
+    if (itemsWereAdded || itemsWereRemoved) {
+      distributions = calcDistributions(items.length);
+    }
+    if (items.length === 0) return;
+    
+    // Randomly choose item with distribution.
+    const rand = random();
+    let i;
+    for (i = 0; i < distributions.length; ++i) {
+      if (rand < distributions[i]) break;
+    }
+    const item = items[i];
+    
+    // Move item to back of list.
+    items.splice(i, 1);
+    items.push(item);
+    
+    // ===============================================================
+    // ===============================================================
+    
+    const randItemRelPos = ((rand - item.pos)/item.weight);
+    
+    items[0].weight = distributions[0];
+    items[0].pos = 0;
+    for (let j = 1; j < distributions.length; ++j) {
+      items[j].weight = distributions[j] - distributions[j - 1];
+      items[j].pos = distributions[j - 1];
+    }
+    items[distributions.length].weight = 1 - distributions[distributions.length - 1];
+    items[distributions.length].pos = distributions[distributions.length - 1];
+    
+    return {
+      rand,
+      randItemRelPos,
+      chosenItem: item,
+    };
+  }
+})
+
+})();</script>
+
+<br />
+<hr />
+
+
+  <div class="weightAlgo">
+    <h2>Weighted</h2>
+    <div class="term"></div>
+    <label>Shrink:</label> <input class="shrink" type="number" min="0.00" max="1" step="0.05" value="0.15" autocomplete="off"/><br />
+  </div>
+<script>(async() => {
+
+// Page setup.
+const containerElem = document.querySelector('.weightAlgo');
+const termElem = containerElem.querySelector('.term');
+
+createPattern(termElem, items => {
+  let shrinkFactor = 0.15;
+  containerElem.querySelector('.shrink').addEventListener('change', event => {
+    if (!event.target.validity.valid) return;
+    shrinkFactor = event.target.valueAsNumber || 0.001;
+  });
+  
+  function resetWeights() {
+    for (const item of items) item.weight = 1/items.length;
+  }
+  function recalcWeights() {
+    let totalWeight = 0;
+    for (const item of items) totalWeight += item.weight;
+    for (const item of items) item.weight = item.weight/totalWeight;
+  }
+
+  // ===============================================================
+  // Weighted Algo
+  // ===============================================================
+
+  resetWeights();
+
+  return function step(random, {itemsWereAdded, itemsWereRemoved}) {
+    if (itemsWereAdded) resetWeights();
+    if (itemsWereRemoved) recalcWeights();
+    if (items.length === 0) return;
+    
+    // Randomly choose item using weights.
+    const rand = random();
+    
+    let offset = 0;
+    let totalWeight = 0;
+    let i;
+    for (i = 0; i < items.length - 1; ++i) {
+      offset += items[i].weight;
+      if (rand < offset) break;
+      totalWeight = offset; 
+    }
+    const item = items[i];
+    const randItemRelPos = (rand - item.pos) / item.weight;
+    
+    // Reduce chosen item's weight.
+    item.weight *= shrinkFactor;
+    
+    // Redistribute weight.
+    while (i < items.length) {
+      totalWeight += items[i].weight;
+      ++i;
+    }
+    for (let j = 0; j < items.length; ++j) {
+      items[j].weight = items[j].weight / totalWeight;
+    }
+    
+    // ===============================================================
+    // ===============================================================
+    
+    items[0].pos = 0;
+    for (let j = 1; j < items.length; ++j) {
+      items[j].pos = items[j - 1].pos + items[j - 1].weight;
+    }
+    return {
+      rand,
+      randItemRelPos,
+      chosenItem: item,
+    };
+  };
+});
+
+})();</script>
+
+<br />
+<hr />
+
+
+  <div class="rando">
+    <h2>Random</h2>
+    <div class="term"></div>
+  </div>
+<script>(async() => {
+
+// Page setup.
+const containerElem = document.querySelector('.rando');
+const termElem = containerElem.querySelector('.term');
+
+createPattern(termElem, items => {
+  function reset() {
+    for (let i = 0; i < items.length; ++i) {
+      items[i].weight = 1/items.length;
+      items[i].pos = i/items.length;
+    }
+  }
+  
+  reset();
+  
+  return function step(random, {itemsWereAdded, itemsWereRemoved}) {
+    if (itemsWereAdded || itemsWereRemoved) reset();
+    if (items.length === 0) return;
+  
+    // Pure random.
+    const rand = random();
+    const item = items[Math.floor(rand * items.length)];
+    return {
+      rand,
+      randItemRelPos: (rand - item.pos) / item.weight,
+      chosenItem: item,
+    };
+  }
+});
+
+
+
+syncLoop();
+
+})();</script>
+
+</body>
+</html>
